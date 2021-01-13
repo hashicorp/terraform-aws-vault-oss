@@ -11,14 +11,14 @@ module "vault-starter" {
   source                = "./.."
   allowed_inbound_cidrs = ["107.159.87.170/32"]
   vpc_id                = "vpc-121a0468"
-  vault_version         = "1.5.5"
+  vault_version         = "1.6.1"
   vault_binary_bucket   = "ncabatoff-vault-binaries"
   vault_binary_name     = "vault-e04e23aa2ce15d1135938b6efaf66ebb928f134b.gz"
   owner                 = "ncabatoff"
   name_prefix           = "ncabatoff"
   key_name              = "deployer-key"
   elb_internal          = false
-  vault_cluster_version = "0.0.4"
+  vault_cluster_version = "0.0.5"
   vault_nodes = 3
 }
 

@@ -21,13 +21,17 @@ apt-get install -y awscli
 echo "Configuring system time"
 timedatectl set-timezone UTC
 
-echo "Overwriting Vault binary using "
-# we install the package to get things like the vault user and systemd configuration,
-# but we're going to use our own binary:
-aws s3 cp s3://${vault_binary_bucket}/${vault_binary_name} /tmp/vault.gz
-gunzip -f /tmp/vault.gz
-cp /tmp/vault /usr/bin/vault
-/sbin/setcap cap_ipc_lock=+ep /usr/bin/vault
+#echo "Overwriting Vault binary using "
+## we install the package to get things like the vault user and systemd configuration,
+## but we're going to use our own binary:
+#aws s3 cp s3://${vault_binary_bucket}/${vault_binary_name} /tmp/vault.gz
+#gunzip -f /tmp/vault.gz
+#cp /tmp/vault /usr/bin/vault
+#/sbin/setcap cap_ipc_lock=+ep /usr/bin/vault
+
+aws s3 cp s3://${vault_binary_bucket}/tls.crt /opt/vault/tls
+aws s3 cp s3://${vault_binary_bucket}/tls.key /opt/vault/tls
+aws s3 cp s3://${vault_binary_bucket}/ca.crt /opt/vault/tls
 
 # Have the instance retrieve it's own instance id
 asg_name=$(aws autoscaling describe-auto-scaling-instances --instance-ids "$instance_id" --region "${region}" | jq -r ".AutoScalingInstances[].AutoScalingGroupName")
@@ -65,18 +69,20 @@ storage "raft" {
   path    = "/opt/vault/data"
   node_id = "$instance_id"
   retry_join {
+    leader_ca_cert_file = "/opt/vault/tls/ca.crt"
     auto_join = "provider=aws region=us-east-1 tag_key=owner tag_value=ncabatoff"
-    auto_join_scheme = "http"
+    auto_join_scheme = "https"
     auto_join_port = 8200
   }
 }
 
-cluster_addr = "http://$local_ipv4:8201"
-api_addr = "http://0.0.0.0:8200"
+cluster_addr = "https://$local_ipv4:8201"
+api_addr = "https://0.0.0.0:8200"
 
 listener "tcp" {
  address     = "0.0.0.0:8200"
- tls_disable = 1
+ tls_key_file  = "/opt/vault/tls/tls.key"
+ tls_cert_file = "/opt/vault/tls/tls.crt"
 }
 
 seal "awskms" {
@@ -109,7 +115,7 @@ done
 existingCluster=false
 
 for i in $${vault_ip_array[*]}; do
-        status=$(curl -s "http://$i:8200/v1/sys/init" | jq -r .initialized)
+        status=$(curl -s "https://$i:8200/v1/sys/init" | jq -r .initialized)
 	# if you get a true response back from even one node then
         # assume you are entering an existing cluster
         # (no need to check the rest of the nodes at this point)
@@ -141,7 +147,7 @@ clusterCheck() {
 		done
 
 		for i in $${recheck_vault_ip_array[*]}; do
-                    init_status=$(curl -s "http://$i:8200/v1/sys/init" | jq -r .initialized)
+                    init_status=$(curl -s "https://$i:8200/v1/sys/init" | jq -r .initialized)
                     # if there is a node lingering around and it is not
                     # returning true then it has not been fully removed
                     # from the cluster and we cannot join yet
@@ -179,7 +185,7 @@ systemctl start vault
 
 echo "Setup Vault profile"
 cat <<PROFILE | sudo tee /etc/profile.d/vault.sh
-export VAULT_ADDR="http://127.0.0.1:8200"
+export VAULT_ADDR="https://127.0.0.1:8200"
 PROFILE
 
 # have the node add this tag to itself after coming up

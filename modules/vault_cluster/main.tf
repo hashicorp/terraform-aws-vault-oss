@@ -76,7 +76,7 @@ resource "aws_lb_target_group" "vault" {
   health_check {
     healthy_threshold   = 2
     unhealthy_threshold = 2
-    protocol            = "HTTP"
+    protocol            = "HTTPS"
     port                = "traffic-port"
     path                = var.vault_elb_health_check
     interval            = 10
