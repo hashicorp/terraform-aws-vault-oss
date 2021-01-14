@@ -13,12 +13,12 @@ module "vault-starter" {
   vpc_id                = "vpc-121a0468"
   vault_version         = "1.6.1"
   vault_binary_bucket   = "ncabatoff-vault-binaries"
-  vault_binary_name     = "vault-e04e23aa2ce15d1135938b6efaf66ebb928f134b.gz"
+  vault_binary_name     = "vault-d4b295baf7f63294450d47aebf98a2cc4bfd50e5.gz"
   owner                 = "ncabatoff"
   name_prefix           = "ncabatoff"
   key_name              = "deployer-key"
   elb_internal          = false
-  vault_cluster_version = "0.0.5"
+  vault_cluster_version = "0.0.6"
   vault_nodes = 3
 }
 

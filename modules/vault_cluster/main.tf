@@ -84,7 +84,7 @@ resource "aws_lb_target_group" "vault" {
 }
 
 resource "aws_autoscaling_group" "vault" {
-  name                      = aws_launch_configuration.vault.name
+  name                      = "vault-asg"
   launch_configuration      = aws_launch_configuration.vault.name
   availability_zones        = data.aws_availability_zones.available.zone_ids
   min_size                  = var.vault_nodes
@@ -122,7 +122,7 @@ resource "aws_autoscaling_group" "vault" {
 }
 
 resource "aws_launch_configuration" "vault" {
-  name                        = "${random_id.environment_name.hex}-vault-${var.vault_cluster_version}"
+  name_prefix                 = "${random_id.environment_name.hex}-vault-${var.vault_cluster_version}-"
   image_id                    = data.aws_ami.ubuntu.id
   instance_type               = var.instance_type
   key_name                    = var.key_name

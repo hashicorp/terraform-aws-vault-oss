@@ -18,20 +18,51 @@ chmod +x /bin/jq
 echo "installing AWS CLI"
 apt-get install -y awscli
 
+echo "installing cfssl"
+apt-get install -y golang-cfssl
+
 echo "Configuring system time"
 timedatectl set-timezone UTC
 
-#echo "Overwriting Vault binary using "
-## we install the package to get things like the vault user and systemd configuration,
-## but we're going to use our own binary:
-#aws s3 cp s3://${vault_binary_bucket}/${vault_binary_name} /tmp/vault.gz
-#gunzip -f /tmp/vault.gz
-#cp /tmp/vault /usr/bin/vault
-#/sbin/setcap cap_ipc_lock=+ep /usr/bin/vault
+echo "Overwriting Vault binary using "
+# we install the package to get things like the vault user and systemd configuration,
+# but we're going to use our own binary:
+aws s3 cp s3://${vault_binary_bucket}/${vault_binary_name} /tmp/vault.gz
+gunzip -f /tmp/vault.gz
+cp /tmp/vault /usr/bin/vault
+/sbin/setcap cap_ipc_lock=+ep /usr/bin/vault
 
-aws s3 cp s3://${vault_binary_bucket}/tls.crt /opt/vault/tls
-aws s3 cp s3://${vault_binary_bucket}/tls.key /opt/vault/tls
 aws s3 cp s3://${vault_binary_bucket}/ca.crt /opt/vault/tls
+aws s3 cp s3://${vault_binary_bucket}/ca.key /opt/vault/tls
+aws s3 cp s3://${vault_binary_bucket}/ca-config.json /opt/vault/tls
+
+cat - > /tmp/csr.json <<EOF
+{
+  "CN": "hashicorp.test",
+  "hosts": [
+    "127.0.0.1",
+    "localhost",
+    "vault"
+  ],
+  "key": {
+    "algo": "rsa",
+    "size": 2048
+  },
+  "names": [
+    {
+      "C": "US",
+      "L": "San Francisco",
+      "O": "HashiCorp",
+      "OU": "Test Certificate Authority",
+      "ST": "California"
+    }
+  ]
+}
+EOF
+
+cfssl gencert -ca=/opt/vault/tls/ca.crt -ca-key=/opt/vault/tls/ca.key \
+  -config=/opt/vault/tls/ca-config.json -profile=vault /tmp/csr.json |
+    cfssljson -bare /opt/vault/tls/vault
 
 # Have the instance retrieve it's own instance id
 asg_name=$(aws autoscaling describe-auto-scaling-instances --instance-ids "$instance_id" --region "${region}" | jq -r ".AutoScalingInstances[].AutoScalingGroupName")
@@ -70,6 +101,9 @@ storage "raft" {
   node_id = "$instance_id"
   retry_join {
     leader_ca_cert_file = "/opt/vault/tls/ca.crt"
+    leader_client_cert_file = "/opt/vault/tls/vault.pem"
+    leader_client_key_file = "/opt/vault/tls/vault-key.pem"
+    leader_tls_servername = "vault"
     auto_join = "provider=aws region=us-east-1 tag_key=owner tag_value=ncabatoff"
     auto_join_scheme = "https"
     auto_join_port = 8200
@@ -81,8 +115,10 @@ api_addr = "https://0.0.0.0:8200"
 
 listener "tcp" {
  address     = "0.0.0.0:8200"
- tls_key_file  = "/opt/vault/tls/tls.key"
- tls_cert_file = "/opt/vault/tls/tls.crt"
+ tls_key_file  = "/opt/vault/tls/vault-key.pem"
+ tls_cert_file = "/opt/vault/tls/vault.pem"
+ tls_require_and_verify_client_cert = "true"
+ tls_client_ca_file = "/opt/vault/tls/ca.crt"
 }
 
 seal "awskms" {
@@ -94,6 +130,9 @@ EOF
 mkdir -p -m 700 /opt/vault/data
 chown -R vault:vault /etc/vault.d/* /opt/vault
 chmod -R 640 /etc/vault.d/*
+chmod 755 /opt/vault/tls
+chmod a+r /opt/vault/tls/*  # this is insecure, but needed for now since we're using the same
+                            # certs for all purposes
 
 # this part fetches all nodes (in service or not) from the autoscaling
 # group and determines whether it is safe to join the Vault cluster
@@ -186,6 +225,9 @@ systemctl start vault
 echo "Setup Vault profile"
 cat <<PROFILE | sudo tee /etc/profile.d/vault.sh
 export VAULT_ADDR="https://127.0.0.1:8200"
+export VAULT_CACERT=/opt/vault/tls/ca.crt
+export VAULT_CLIENT_CERT=/opt/vault/tls/vault.pem
+export VAULT_CLIENT_KEY=/opt/vault/tls/vault-key.pem
 PROFILE
 
 # have the node add this tag to itself after coming up
