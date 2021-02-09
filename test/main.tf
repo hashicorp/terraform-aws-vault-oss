@@ -11,9 +11,9 @@ module "vault-starter" {
   source                = "./.."
   allowed_inbound_cidrs = ["107.159.87.170/32"]
   vpc_id                = "vpc-121a0468"
-  vault_version         = "1.6.1"
+  vault_version         = "1.6.2"
   vault_binary_bucket   = "ncabatoff-vault-binaries"
-  vault_binary_name     = "vault-d4b295baf7f63294450d47aebf98a2cc4bfd50e5.gz"
+  vault_binary_name     = ""
   owner                 = "ncabatoff"
   name_prefix           = "ncabatoff"
   key_name              = "deployer-key"

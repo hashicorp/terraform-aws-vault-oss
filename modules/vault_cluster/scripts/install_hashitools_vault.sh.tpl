@@ -27,10 +27,12 @@ timedatectl set-timezone UTC
 echo "Overwriting Vault binary using "
 # we install the package to get things like the vault user and systemd configuration,
 # but we're going to use our own binary:
-aws s3 cp s3://${vault_binary_bucket}/${vault_binary_name} /tmp/vault.gz
-gunzip -f /tmp/vault.gz
-cp /tmp/vault /usr/bin/vault
-/sbin/setcap cap_ipc_lock=+ep /usr/bin/vault
+if [ "${vault_binary_name}" != "" ]; then
+  aws s3 cp s3://${vault_binary_bucket}/${vault_binary_name} /tmp/vault.gz
+  gunzip -f /tmp/vault.gz
+  cp /tmp/vault /usr/bin/vault
+  /sbin/setcap cap_ipc_lock=+ep /usr/bin/vault
+fi
 
 aws s3 cp s3://${vault_binary_bucket}/ca.crt /opt/vault/tls
 aws s3 cp s3://${vault_binary_bucket}/ca.key /opt/vault/tls
